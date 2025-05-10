@@ -1,0 +1,28 @@
+# Core dependencies
+fastapi==0.115.12
+uvicorn==0.34.2
+pydantic==2.11.4
+python-dotenv==1.0.1
+
+# Network and HTTP
+requests==2.32.3
+httpx==0.27.0
+
+# Data processing
+numpy==1.26.4
+pandas==2.2.2
+networkx==3.3
+
+# Machine learning and NLP
+openai==1.24.0  # For GPT integration
+matplotlib==3.8.3  # For generating network visualizations
+scikit-learn==1.4.1  # For any machine learning features
+
+# HTML and visualization
+jinja2==3.1.3  # For HTML templates
+python-multipart==0.0.9  # For handling form data
+
+# Development and testing
+pytest==8.0.2
+black==24.4.0  # Code formatting
+isort==5.13.2  # Import sorting

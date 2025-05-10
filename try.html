@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Character Network Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        /* Base styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1e2130;
+            color: white;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        
+        h1 {
+            text-align: center;
+            margin: 10px 0;
+            font-size: calc(1.2rem + 1vw);
+            word-wrap: break-word;
+        }
+        
+        #visualization {
+            width: 100%;
+            height: calc(100vh - 130px); /* Adjust for header and controls */
+            border: 1px solid #2d3748;
+            border-radius: 5px;
+            overflow: hidden;
+            touch-action: none; /* Prevent browser handling of touch gestures */
+        }
+        
+        .links line {
+            stroke: #fff;
+            stroke-opacity: 0.6;
+        }
+        
+        .nodes text {
+            font-weight: bold;
+            font-size: 10px; /* Smaller font for mobile */
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
+        
+        .tooltip {
+            position: absolute;
+            padding: 8px;
+            background-color: rgba(0, 0, 0, 0.9);
+            border-radius: 5px;
+            color: white;
+            pointer-events: none;
+            z-index: 100;
+            max-width: 80%;
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin: 10px 0;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .controls button {
+            padding: 8px 12px;
+            background-color: #4a5568;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .controls button:hover, .controls button:active {
+            background-color: #2d3748;
+        }
+        
+        .info-bar {
+            font-size: 12px;
+            text-align: center;
+            padding: 5px;
+            opacity: 0.8;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 1000;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .container {
+                padding: 5px;
+            }
+            
+            h1 {
+                font-size: 1.2rem;
+                margin: 5px 0;
+            }
+            
+            .controls button {
+                padding: 6px 10px;
+                font-size: 12px;
+                flex-grow: 1;
+            }
+            
+            .nodes text {
+                font-size: 9px;
+            }
+            
+            .tooltip {
+                font-size: 12px;
+                padding: 5px;
+            }
+            
+            #visualization {
+                height: calc(100vh - 110px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Character Relationship Network</h1>
+        <div class="controls">
+            <button id="resetZoom">Reset View</button>
+            <button id="toggleLabels">Toggle Labels</button>
+            <button id="togglePhysics">Freeze/Unfreeze</button>
+        </div>
+        <div id="loading">Loading visualization...</div>
+        <div id="visualization"></div>
+        <div class="info-bar">Tap a character to see details. Drag to reposition.</div>
+    </div>
+    
+    <script>
+        // Network data
+        const graph = {
+            "nodes": [{"id": "Romeo", "name": "Romeo", "value": 62, "description": "Mentioned 62 times in the book."}, {"id": "Benvolio", "name": "Benvolio", "value": 38, "description": "Mentioned 38 times in the book."}, {"id": "Nurse", "name": "Nurse", "value": 26, "description": "Mentioned 26 times in the book."}, {"id": "Juliet", "name": "Juliet", "value": 24, "description": "Mentioned 24 times in the book."}, {"id": "Capulet", "name": "Capulet", "value": 19, "description": "Mentioned 19 times in the book."}, {"id": "Mercutio", "name": "Mercutio", "value": 16, "description": "Mentioned 16 times in the book."}, {"id": "Lady Capulet", "name": "Lady Capulet", "value": 14, "description": "Mentioned 14 times in the book."}, {"id": "Tybalt", "name": "Tybalt", "value": 12, "description": "Mentioned 12 times in the book."}, {"id": "Sampson", "name": "Sampson", "value": 10, "description": "Mentioned 10 times in the book."}, {"id": "Gregory", "name": "Gregory", "value": 9, "description": "Mentioned 9 times in the book."}, {"id": "Servant", "name": "Servant", "value": 9, "description": "Mentioned 9 times in the book."}, {"id": "Montague", "name": "Montague", "value": 8, "description": "Mentioned 8 times in the book."}],
+            "links": [{"source": "Gregory", "target": "Sampson", "value": 10}, {"source": "Benvolio", "target": "Gregory", "value": 1}, {"source": "Benvolio", "target": "Sampson", "value": 1}, {"source": "Benvolio", "target": "Tybalt", "value": 2}, {"source": "Capulet", "target": "Montague", "value": 1}, {"source": "Capulet", "target": "Lady Capulet", "value": 1}, {"source": "Benvolio", "target": "Romeo", "value": 34}, {"source": "Benvolio", "target": "Montague", "value": 3}, {"source": "Montague", "target": "Romeo", "value": 1}, {"source": "Romeo", "target": "Servant", "value": 4}, {"source": "Lady Capulet", "target": "Nurse", "value": 9}, {"source": "Juliet", "target": "Nurse", "value": 19}, {"source": "Lady Capulet", "target": "Romeo", "value": 2}, {"source": "Juliet", "target": "Lady Capulet", "value": 5}, {"source": "Mercutio", "target": "Romeo", "value": 10}, {"source": "Nurse", "target": "Romeo", "value": 1}, {"source": "Benvolio", "target": "Mercutio", "value": 5}, {"source": "Romeo", "target": "Tybalt", "value": 4}, {"source": "Capulet", "target": "Tybalt", "value": 5}, {"source": "Juliet", "target": "Romeo", "value": 6}]
+        };
+        
+        // Determine if mobile device
+        const isMobile = window.innerWidth <= 768;
+        
+        // Adjust force parameters based on device
+        const forceStrength = isMobile ? -200 : -300;
+        const linkDistance = isMobile ? 100 : 150;
+        
+        // Create the visualization
+        const width = document.getElementById('visualization').clientWidth;
+        const height = document.getElementById('visualization').clientHeight;
+        
+        // Create tooltip
+        const tooltip = d3.select("body")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+        
+        // Create SVG container
+        const svg = d3.select("#visualization")
+            .append("svg")
+            .attr("width", "100%")
+            .attr("height", "100%")
+            .attr("viewBox", `0 0 ${width} ${height}`)
+            .attr("preserveAspectRatio", "xMidYMid meet");
+        
+        // Add zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            });
+            
+        svg.call(zoom);
+        
+        // Create main container group
+        const g = svg.append("g");
+        
+        // Create marker definitions for arrowheads
+        svg.append("defs").selectAll("marker")
+            .data(["arrow"])
+            .enter()
+            .append("marker")
+            .attr("id", d => d)
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 20)  // Adjusted for mobile
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("fill", "#fff")
+            .attr("d", "M0,-5L10,0L0,5");
+        
+        // Create simulation
+        const simulation = d3.forceSimulation(graph.nodes)
+            .force("link", d3.forceLink(graph.links).id(d => d.id).distance(linkDistance))
+            .force("charge", d3.forceManyBody().strength(forceStrength))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collide", d3.forceCollide().radius(d => Math.sqrt(d.value) * 1.5 + 15));
+        
+        // Create links
+        const link = g.append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(graph.links)
+            .enter()
+            .append("line")
+            .attr("stroke-width", d => Math.max(1, Math.sqrt(d.value) * 0.5))
+            .attr("stroke", "white")
+            .attr("opacity", 0.6)
+            .attr("marker-end", "url(#arrow)");
+        
+        // Create nodes group
+        const node = g.append("g")
+            .attr("class", "nodes")
+            .selectAll("g")
+            .data(graph.nodes)
+            .enter()
+            .append("g");
+        
+        // Add text labels
+        const labels = node.append("text")
+            .text(d => d.name)
+            .attr("x", 0)
+            .attr("y", 0)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "middle")
+            .attr("fill", "white")
+            .style("pointer-events", "none");
+        
+        // Create invisible drag area (larger than text for better touch targets)
+        node.append("circle")
+            .attr("r", d => Math.max(15, d.name.length * 3.5))
+            .style("fill", "transparent")
+            .style("cursor", "pointer");
+        
+        // Drag behavior
+        const drag = d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended);
+            
+        node.call(drag);
+        
+        // Touch/click handlers (optimized for mobile)
+        node.on("touchstart mouseenter", function(event, d) {
+            // Prevent default touch behavior
+            event.preventDefault();
+            
+            tooltip.transition()
+                .duration(200)
+                .style("opacity", .9);
+                
+            tooltip.html(`<strong>${d.name}</strong><br/>${d.description}`)
+                .style("left", (event.type === "touchstart" ? 
+                    event.touches[0].pageX : event.pageX) + "px")
+                .style("top", (event.type === "touchstart" ? 
+                    event.touches[0].pageY - 40 : event.pageY - 28) + "px");
+                
+            // Highlight connected links
+            link.style("opacity", l => 
+                (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.1
+            );
+            
+            // Highlight connected nodes
+            node.style("opacity", n => 
+                (n.id === d.id || graph.links.some(l => 
+                    (l.source.id === d.id && l.target.id === n.id) || 
+                    (l.target.id === d.id && l.source.id === n.id)
+                )) ? 1 : 0.3
+            );
+        })
+        .on("touchend mouseleave", function() {
+            setTimeout(() => {
+                tooltip.transition()
+                    .duration(500)
+                    .style("opacity", 0);
+            }, 3000);  // Keep tooltip visible longer on mobile
+                
+            // Reset highlighting with delay for mobile
+            setTimeout(() => {
+                link.style("opacity", 0.6);
+                node.style("opacity", 1);
+            }, 1000);
+        });
+        
+        // Simulation tick event
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+                
+            node
+                .attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+        
+        // Reset zoom handler
+        document.getElementById("resetZoom").addEventListener("click", function(event) {
+            event.preventDefault();
+            svg.transition()
+                .duration(750)
+                .call(zoom.transform, d3.zoomIdentity);
+        });
+        
+        // Toggle labels handler
+        let labelsVisible = true;
+        document.getElementById("toggleLabels").addEventListener("click", function(event) {
+            event.preventDefault();
+            labelsVisible = !labelsVisible;
+            labels.style("display", labelsVisible ? "block" : "none");
+        });
+        
+        // Toggle physics handler
+        let physicsActive = true;
+        document.getElementById("togglePhysics").addEventListener("click", function(event) {
+            event.preventDefault();
+            physicsActive = !physicsActive;
+            
+            if (physicsActive) {
+                simulation.alphaTarget(0.3).restart();
+                // Release all fixed positions
+                graph.nodes.forEach(node => {
+                    node.fx = null;
+                    node.fy = null;
+                });
+            } else {
+                simulation.alphaTarget(0);
+                // Fix all nodes in their current positions
+                graph.nodes.forEach(node => {
+                    node.fx = node.x;
+                    node.fy = node.y;
+                });
+            }
+        });
+        
+        // Drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            // Keep nodes fixed if physics is turned off
+            if (physicsActive) {
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+        
+        // Initial layout optimization for mobile
+        if (isMobile) {
+            // Run simulation for a bit to better position nodes
+            for (let i = 0; i < 300; ++i) simulation.tick();
+        }
+        
+        // Hide loading indicator when visualization is ready
+        simulation.on("end", () => {
+            document.getElementById("loading").style.display = "none";
+        });
+        
+        // Hide loading after timeout in case simulation doesn't end
+        setTimeout(() => {
+            document.getElementById("loading").style.display = "none";
+        }, 3000);
+    </script>
+</body>
+</html>
+    
